@@ -6,6 +6,7 @@ HTTPDetector  = client for the real on-prem detection engine (Tier 1 + Tier 3
 """
 from __future__ import annotations
 
+import bisect
 import json
 import re
 import urllib.request
@@ -40,13 +41,14 @@ class RegexDetector:
     (a credit card is not also a phone number)."""
 
     def detect(self, text: str) -> list[Finding]:
-        accepted: list[Finding] = []
-        taken: list[tuple[int, int]] = []
-        for etype, pattern, conf in _PATTERNS:
+        # Collect every validated candidate first, tagged with its pattern's
+        # priority rank; then resolve overlaps high-priority-first. The
+        # overlap test bisects a sorted list of accepted intervals instead of
+        # scanning them all — the old per-match linear scan was O(matches^2)
+        # and took ~35s on a chat export with tens of thousands of matches.
+        cands: list[tuple[int, int, int, str, float]] = []  # start, end, rank, type, conf
+        for rank, (etype, pattern, conf) in enumerate(_PATTERNS):
             for m in pattern.finditer(text):
-                start, end = m.start(), m.end()
-                if any(s < end and start < e for s, e in taken):
-                    continue
                 surface = m.group()
                 digits = "".join(c for c in surface if c.isdigit())
                 if etype == "CREDIT_CARD" and not (13 <= len(digits) <= 19 and luhn_valid(digits)):
@@ -55,10 +57,26 @@ class RegexDetector:
                     continue
                 if etype == "PHONE" and not 10 <= len(digits) <= 14:
                     continue
-                accepted.append(
-                    Finding(entity_type=etype, start=start, end=end, confidence=conf, tier="T1")
-                )
-                taken.append((start, end))
+                cands.append((m.start(), m.end(), rank, etype, conf))
+
+        # Priority order (lower rank wins), then position — same precedence as
+        # the original pattern-by-pattern greedy.
+        cands.sort(key=lambda c: (c[2], c[0]))
+        starts: list[int] = []                 # accepted starts, kept sorted
+        intervals: list[tuple[int, int]] = []  # parallel (start, end), sorted by start
+        accepted: list[Finding] = []
+        for start, end, _rank, etype, conf in cands:
+            i = bisect.bisect_right(starts, start)
+            overlaps = (i > 0 and intervals[i - 1][1] > start) or (
+                i < len(intervals) and intervals[i][0] < end
+            )
+            if overlaps:
+                continue
+            starts.insert(i, start)
+            intervals.insert(i, (start, end))
+            accepted.append(
+                Finding(entity_type=etype, start=start, end=end, confidence=conf, tier="T1")
+            )
         return sorted(accepted, key=lambda f: f.start)
 
 

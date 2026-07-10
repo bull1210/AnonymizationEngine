@@ -9,6 +9,8 @@ Any leak ⇒ status LEAK_DETECTED, quarantined, never delivered.
 """
 from __future__ import annotations
 
+import bisect
+
 from .detection import Detector
 from .types import JobSpec, LeakFinding, PolicyTable, Replacement, Strategy
 
@@ -20,7 +22,19 @@ def verify(
     job: JobSpec,
     detector: Detector,
 ) -> list[LeakFinding]:
-    replaced_ranges = [(r.new_start, r.new_end) for r in replacements]
+    # Replacement ranges are already sorted by new_start and non-overlapping,
+    # so a detected span is "inside a replacement" iff it fits within the one
+    # range whose start is the greatest start <= the detection's start.
+    # Binary-search that range instead of scanning all of them (O(k log n)
+    # not O(k*n) — the linear scan is quadratic and hangs when a document
+    # yields tens of thousands of findings).
+    starts = [r.new_start for r in replacements]
+    ends = [r.new_end for r in replacements]
+
+    def inside_replacement(start: int, end: int) -> bool:
+        i = bisect.bisect_right(starts, start) - 1
+        return i >= 0 and end <= ends[i]
+
     leaks: list[LeakFinding] = []
     for f in detector.detect(masked_text):
         if f.confidence < job.threshold_for(f.entity_type):
@@ -28,7 +42,7 @@ def verify(
         entry = policy.lookup(job.target, f.entity_type)
         if entry.strategy == Strategy.KEEP:
             continue
-        if any(f.start >= s and f.end <= e for s, e in replaced_ranges):
+        if inside_replacement(f.start, f.end):
             continue  # inside a replacement: expected artifact (e.g. FPE output)
         leaks.append(
             LeakFinding(

@@ -60,6 +60,30 @@ def test_offset_integrity_randomized():
             _check_integrity(text, spans, reps)
 
 
+def test_large_document_applies_fast():
+    """Regression: a big document with tens of thousands of findings must
+    apply in linear time. The old per-span slice rebuilt the whole string
+    each iteration (O(n*len)) and hung for minutes on ~8 MB / 56k findings;
+    this must finish in well under a second."""
+    import time
+
+    n = 60_000
+    text = ("word ph 5551234 " * n)          # ~1 MB, a maskable token every ~16 chars
+    plan = []
+    for i in range(n):
+        start = i * 16 + 8                    # the "5551234" span
+        plan.append((Finding("PHONE", start, start + 7, 0.9), "<PHONE>", "suppress"))
+
+    t0 = time.perf_counter()
+    masked, replacements = apply_replacements(text, plan, redact_originals=True)
+    elapsed = time.perf_counter() - t0
+
+    assert len(replacements) == n
+    assert "5551234" not in masked          # every phone gone
+    assert masked.count("<PHONE>") == n
+    assert elapsed < 2.0, f"apply_replacements took {elapsed:.1f}s — quadratic regression"
+
+
 if HAVE_HYPOTHESIS:
 
     @settings(max_examples=200, deadline=None)

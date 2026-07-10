@@ -72,10 +72,18 @@ def apply_replacements(
     if ordered and ordered[-1][0].end > len(text):
         raise ValueError("span exceeds text length: offsets do not match canonical text")
 
-    # Right-to-left application.
-    masked = text
-    for finding, rep_text, _ in reversed(ordered):
-        masked = masked[: finding.start] + rep_text + masked[finding.end :]
+    # Single left-to-right pass: append the untouched gap before each span,
+    # then its replacement, then the trailing tail — one join instead of
+    # rebuilding the whole string per replacement (O(n+len) not O(n*len);
+    # the naive per-span slice is quadratic and hangs on large documents).
+    parts: list[str] = []
+    prev_end = 0
+    for finding, rep_text, _ in ordered:
+        parts.append(text[prev_end : finding.start])
+        parts.append(rep_text)
+        prev_end = finding.end
+    parts.append(text[prev_end:])
+    masked = "".join(parts)
 
     # New offsets via cumulative delta (equivalent to the RTL result).
     replacements: list[Replacement] = []
