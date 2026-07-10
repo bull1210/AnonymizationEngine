@@ -12,6 +12,7 @@ from anonymizer.core.types import Finding, Target, jobspec_from_dict
 from anonymizer.policyengine import (
     RegulationPack,
     action_to_strategy,
+    compatible_targets,
     compile_job_policy,
     compose,
     load_pack,
@@ -79,6 +80,15 @@ class TestActionMapping:
         for action in ("fpe", "hmac_pseudonym"):
             with pytest.raises(ValueError, match="linkable"):
                 action_to_strategy(action, Target.TRAINING)
+
+    def test_compatible_targets(self) -> None:
+        """Job launchers use this to reject pack/mode mismatches up front."""
+        assert compatible_targets(load_pack(REGS / "rag_default.yaml")) == {"rag"}
+        assert compatible_targets(
+            load_pack(REGS / "training_default.yaml")) == {"rag", "training"}
+        # hmac_tokenize is guarantee-aware, so HIPAA serves both targets
+        assert compatible_targets(
+            load_pack(REGS / "hipaa_safe_harbor.yaml")) == {"rag", "training"}
 
 
 class TestComposition:

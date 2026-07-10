@@ -58,6 +58,11 @@ Action = Literal[
     "hmac_pseudonym", "fpe", "hash_irreversible", "suppress",
 ]
 
+#: Native actions that produce stable, cross-document identifiers — packs
+#: using them can only serve the ``rag`` target (the portable
+#: ``hmac_tokenize`` action is fine everywhere: it maps per target).
+LINKABLE_ACTIONS = frozenset({"fpe", "hmac_pseudonym"})
+
 
 def action_to_strategy(action: str, target: Target) -> Strategy:
     """Map a policy action onto the executing strategy for a target.
@@ -137,6 +142,15 @@ def load_pack(path: str | Path) -> RegulationPack:
     pack = RegulationPack.model_validate(data)
     pack.sha256 = hashlib.sha256(raw).hexdigest()
     return pack
+
+
+def compatible_targets(pack: RegulationPack) -> set[str]:
+    """Which job targets this pack can compile for. Callers (UIs, job
+    launchers) should check this up front so an incompatible pack/mode pair
+    is rejected at selection time, not as a failed job."""
+    if any(r.action in LINKABLE_ACTIONS for r in pack.rules):
+        return {Target.RAG.value}
+    return {Target.TRAINING.value, Target.RAG.value}
 
 
 def load_packs(packs_dir: str | Path, names: list[str]) -> list[RegulationPack]:
