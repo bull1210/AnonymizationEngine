@@ -1,0 +1,14 @@
+# Container config (paths match docker-compose volumes).
+policy_path: /etc/anonymizer/masking_policy.yaml
+db_path: /data/state/anonymizer.db
+output_dir: /data/output
+input:
+  mode: dir
+  dir: /data/input
+detection:
+  mode: regex
+secrets:
+  provider: env          # dev; switch to file/vault for production
+defaults:
+  confidence_threshold: 0.5
+  salt_scope: tenant

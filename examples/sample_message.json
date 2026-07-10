@@ -1,0 +1,19 @@
+{
+  "file_id": "example-001",
+  "text": "Dr. Priya Sharma (phone 9840123456) was admitted on 2024-03-12 and discharged on 2024-03-15. Prescribed Metformin. Card on file: 4111 1111 1111 1111. Later, SHARMA, Priya confirmed.",
+  "findings": [
+    {"entity_type": "PERSON", "start": 0, "end": 16, "confidence": 0.98, "tier": "T3"},
+    {"entity_type": "PHONE", "start": 24, "end": 34, "confidence": 0.95, "tier": "T1"},
+    {"entity_type": "DATE", "start": 52, "end": 62, "confidence": 0.9, "tier": "T1"},
+    {"entity_type": "DATE", "start": 81, "end": 91, "confidence": 0.9, "tier": "T1"},
+    {"entity_type": "MEDICATION", "start": 104, "end": 113, "confidence": 0.85, "tier": "T3"},
+    {"entity_type": "CREDIT_CARD", "start": 129, "end": 148, "confidence": 0.99, "tier": "T1"},
+    {"entity_type": "PERSON", "start": 157, "end": 170, "confidence": 0.9, "tier": "T3"}
+  ],
+  "job": {
+    "job_id": "demo-job",
+    "downstream_target": "training",
+    "tenant_id": "default",
+    "confidence_threshold": 0.5
+  }
+}

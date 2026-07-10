@@ -1,0 +1,36 @@
+# Application configuration (copy to app.yaml and edit).
+# SECRETS NEVER GO IN THIS FILE.
+
+policy_path: config/masking_policy.yaml
+db_path: anonymizer.db            # receipts/collisions/vault; use Postgres in prod
+output_dir: output                # masked artifacts: output/{job_id}/{file_id}.txt
+
+input:
+  mode: dir                       # dir | kafka
+  dir: input                      # directory queue of *.json messages
+  # mode: kafka
+  # bootstrap_servers: "broker1:9092,broker2:9092"
+
+text_store:
+  # url: "http://text-store:8080" # canonical extracted text by file_id;
+                                  # unset -> messages must carry inline text
+
+detection:
+  mode: regex                     # regex (built-in Tier-1) | http (real engine) | none (dev)
+  # mode: http
+  # url: "http://detection:8080"
+
+secrets:
+  provider: env                   # env (dev) | file (local KMS) | vault (HashiCorp)
+  # provider: file
+  # path: /etc/anonymizer/kms.json     # chmod 600, {tenant: {hmac_salt, ff31_key,
+  #                                    #  ff31_tweak, vault_key}} (hex)
+  # provider: vault
+  # vault_addr: "https://vault.internal:8200"
+
+defaults:
+  confidence_threshold: 0.5       # mask at >= 0.5; over-masking is the safe direction
+  salt_scope: tenant              # tenant | corpus | run (run breaks cross-run consistency)
+
+verification:
+  ner_sample_rate: 1.0            # keep 1.0 for PHI jobs

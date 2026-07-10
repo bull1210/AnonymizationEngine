@@ -1,0 +1,89 @@
+# Anonymization engine stack.
+# Core services run out of the box (directory input, SQLite state).
+# `--profile kafka` adds a KRaft broker + topic init for event-driven intake.
+# `--profile observability` adds Prometheus + Grafana.
+# See docs/DOCKER_DEPLOYMENT.md for hardening (TLS, HashiCorp Vault, scaling).
+
+name: anonymizer-stack
+
+services:
+  anonymizer-worker:
+    build: .
+    image: anonymizer:latest
+    environment:
+      # DEV secrets only — production uses secrets.provider: file|vault.
+      ANON_DEFAULT_HMAC_SALT: ${ANON_DEFAULT_HMAC_SALT:?set in .env}
+      ANON_DEFAULT_FF31_KEY: ${ANON_DEFAULT_FF31_KEY:?set in .env}
+      ANON_DEFAULT_FF31_TWEAK: ${ANON_DEFAULT_FF31_TWEAK:?set in .env}
+      ANON_DEFAULT_VAULT_KEY: ${ANON_DEFAULT_VAULT_KEY:-}
+    volumes:
+      - ./config/app.docker.yaml:/etc/anonymizer/app.yaml:ro
+      - ./config/masking_policy.yaml:/etc/anonymizer/masking_policy.yaml:ro
+      - input:/data/input
+      - output:/data/output
+      - state:/data/state
+    deploy:
+      replicas: 2            # stateless — scale freely
+
+  anonymizer-api:
+    image: anonymizer:latest
+    build: .
+    command: ["serve", "--config", "/etc/anonymizer/app.yaml", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      ANON_DEFAULT_HMAC_SALT: ${ANON_DEFAULT_HMAC_SALT}
+      ANON_DEFAULT_FF31_KEY: ${ANON_DEFAULT_FF31_KEY}
+      ANON_DEFAULT_FF31_TWEAK: ${ANON_DEFAULT_FF31_TWEAK}
+      ANON_DEFAULT_VAULT_KEY: ${ANON_DEFAULT_VAULT_KEY:-}
+    volumes:
+      - ./config/app.docker.yaml:/etc/anonymizer/app.yaml:ro
+      - ./config/masking_policy.yaml:/etc/anonymizer/masking_policy.yaml:ro
+      - output:/data/output
+      - state:/data/state
+    ports: ["8000:8000"]
+
+  kafka:
+    profiles: [kafka]
+    image: bitnami/kafka:3.7
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+    volumes: [kafkadata:/bitnami/kafka]
+
+  kafka-init:
+    profiles: [kafka]
+    image: bitnami/kafka:3.7
+    depends_on: [kafka]
+    entrypoint: /bin/bash
+    command: >
+      -c "sleep 5 &&
+          kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+            --topic files.scan.results --partitions 12 --replication-factor 1 &&
+          kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+            --topic files.masked --partitions 12 --replication-factor 1"
+    restart: "no"
+
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports: ["9090:9090"]
+
+  grafana:
+    profiles: [observability]
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports: ["3000:3000"]
+
+volumes:
+  input:
+  output:
+  state:
+  kafkadata:
+  promdata:

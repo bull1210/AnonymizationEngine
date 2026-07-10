@@ -1,0 +1,88 @@
+# Reference masking policy — (downstream_target, entity_type) -> strategy.
+# Pydantic-v2 validated at startup; the service refuses to start if invalid.
+#
+# Invariants (enforced, not advisory):
+#   * default_strategy MUST be `suppress`: unknown entity types fail closed.
+#   * `hmac_pseudonym` and `fpe` are FORBIDDEN under `training` (they create
+#     stable/reversible identifiers — the opposite of irreversible masking).
+#
+# Strategies:
+#   placeholder_indexed  <NAME_1>, <ORG_2>... per-document index scope
+#                        (indexed: false -> bare <TOKEN>, for types without
+#                        identity semantics)
+#   generalize           dates->year, ZIP->first-3, age>89 -> "90+"
+#   date_shift           per-document random +/-365d, intervals preserved
+#   hmac_pseudonym       User_91a4b... stateless HMAC-SHA256(canonical, salt)
+#   fpe                  FF3-1 format-preserving encryption, check digits fixed
+#   suppress             remove entirely
+#   keep                 leave untouched (allowlisted)
+
+version: "1.0"
+default_strategy: suppress
+
+policies:
+  # ------------------------------------------------------------------- #
+  # LLM TRAINING: deterministic, irreversible. No salts, no keys, no
+  # mapping storage. Placeholder vocabulary is documented in the README so
+  # training pipelines can register the tokens as special tokens.
+  # ------------------------------------------------------------------- #
+  training:
+    PERSON:        { strategy: placeholder_indexed, token: NAME }
+    ORG:           { strategy: placeholder_indexed, token: ORG }
+    ORGANIZATION:  { strategy: placeholder_indexed, token: ORG }
+    LOCATION:      { strategy: placeholder_indexed, token: LOC }
+    ADDRESS:       { strategy: placeholder_indexed, token: ADDR }
+    EMAIL:         { strategy: placeholder_indexed, token: EMAIL, indexed: false }
+    PHONE:         { strategy: placeholder_indexed, token: PHONE, indexed: false }
+    URL:           { strategy: placeholder_indexed, token: URL, indexed: false }
+    IP:            { strategy: placeholder_indexed, token: IP, indexed: false }
+    # Types without identity semantics: bare type tokens.
+    MEDICATION:    { strategy: placeholder_indexed, indexed: false }
+    DIAGNOSIS:     { strategy: placeholder_indexed, indexed: false }
+    PROCEDURE:     { strategy: placeholder_indexed, indexed: false }
+    # Quasi-identifiers: HIPAA Safe Harbor aligned generalization.
+    DATE:          { strategy: date_shift }        # or `generalize` for year-only
+    DOB:           { strategy: generalize }
+    ZIP:           { strategy: generalize }
+    PINCODE:       { strategy: generalize }
+    AGE:           { strategy: generalize, params: { bracket_5y: true } }
+    # High-risk structured identifiers: removed outright from training data.
+    CREDIT_CARD:   suppress
+    SSN:           suppress
+    AADHAAR:       suppress
+    PAN:           suppress
+    PASSPORT:      suppress
+    ACCOUNT_NUMBER: suppress
+    MRN:           suppress
+
+  # ------------------------------------------------------------------- #
+  # RAG: consistent pseudonymization. Same real-world entity -> same
+  # surrogate across every file, chunk and worker (within salt scope).
+  # ------------------------------------------------------------------- #
+  rag:
+    PERSON:        hmac_pseudonym
+    ORG:           hmac_pseudonym
+    ORGANIZATION:  hmac_pseudonym
+    LOCATION:      hmac_pseudonym
+    ADDRESS:       hmac_pseudonym
+    EMAIL:         hmac_pseudonym
+    URL:           suppress
+    IP:            hmac_pseudonym
+    # Structured numerics: FF3-1, layout + check digits preserved.
+    CREDIT_CARD:   fpe
+    PHONE:         fpe
+    SSN:           fpe
+    AADHAAR:       fpe
+    ACCOUNT_NUMBER: fpe
+    PAN:           hmac_pseudonym       # alphanumeric: outside digit-FPE domain
+    PASSPORT:      hmac_pseudonym
+    MRN:           fpe
+    # Retained for retrieval quality (review per deployment / data class!).
+    DATE:          keep
+    DOB:           { strategy: generalize }
+    ZIP:           keep
+    PINCODE:       keep
+    AGE:           keep
+    MEDICATION:    keep
+    DIAGNOSIS:     keep
+    PROCEDURE:     keep
