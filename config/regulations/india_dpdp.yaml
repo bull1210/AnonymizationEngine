@@ -1,0 +1,45 @@
+# India — Digital Personal Data Protection Act 2023 (DPDP) profile, folded
+# together with sectoral norms that bind Indian enterprises:
+#   * UIDAI / Aadhaar Act 2016: Aadhaar numbers must never be stored in the
+#     clear — suppressed outright, not even a hash is kept.
+#   * RBI card/account directions (tokenization mandate, 2022): card numbers
+#     removed, account numbers irreversibly hashed.
+#   * CBDT: PAN is a permanent lifelong identifier — irreversible removal.
+# DPDP's "digital personal data" mirrors GDPR breadth: names, contact data,
+# addresses and online identifiers are tokenized; quasi-identifiers
+# (PIN code, DOB, age) generalized. Gray zone -> review (S.8 obligations of
+# the data fiduciary).
+regulation: India_DPDP
+version: "2026.07"
+description: India DPDP Act 2023 + UIDAI/RBI/CBDT identifier norms
+default_action: suppress
+below_threshold: review
+rules:
+  # -- Indian identifier regime
+  - { entity: AADHAAR,        min_confidence: 0.60, action: suppress }        # UIDAI: never stored
+  - { entity: PAN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: PASSPORT,       min_confidence: 0.70, action: hash_irreversible }
+  - { entity: CREDIT_CARD,    min_confidence: 0.70, action: suppress }        # RBI tokenization mandate
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
+  - { entity: SSN,            min_confidence: 0.70, action: hash_irreversible } # foreign IDs in scope too
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }
+  # -- personal data
+  - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.70, action: hash_irreversible } # mobile = primary identifier in India
+  - { entity: ADDRESS,        min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.75, action: hash_irreversible }
+  - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
+  # -- quasi-identifiers
+  - { entity: PINCODE,        min_confidence: 0.70, action: generalize }      # 6-digit PIN -> first 3
+  - { entity: ZIP,            min_confidence: 0.70, action: generalize }
+  - { entity: DOB,            min_confidence: 0.70, action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  - { entity: AGE,            min_confidence: 0.70, action: generalize }
+  # -- non-identifier content preserved
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  - { entity: ORG,            min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: ORGANIZATION,   min_confidence: 0.80, action: hmac_tokenize }

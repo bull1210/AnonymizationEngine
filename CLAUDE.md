@@ -78,10 +78,21 @@ needs none.
 ## Policy engine (regulation packs, Phase 1 — platform docs/07)
 
 `anonymizer/policyengine.py` + `config/regulations/*.yaml`: versioned
-regulation packs (e.g. `hipaa_safe_harbor`) decide an action per entity at a
-per-entity confidence bar, replacing the single global threshold. Selected
-via `anonymizer bridge --regulations name1,name2` (also `--packs-dir`,
-`--policy`, `--review-dir`) or the platform harness `--regulations`.
+regulation packs decide an action per entity at a per-entity confidence bar,
+replacing the single global threshold. Selected via `anonymizer bridge
+--regulations name1,name2` (also `--packs-dir`, `--policy`, `--review-dir`)
+or the platform harness `--regulations`.
+
+Shipped catalog (SHIPPED_PACKS in tests/test_policyengine.py pins it —
+extend the tuple when adding a pack): `training_default` / `rag_default`
+(bit-identical conversions of masking_policy.yaml), `hipaa_safe_harbor`,
+`gdpr_pseudonymization`, `pii_protection` (strict NIST-style baseline,
+mask_anyway), `india_dpdp` (DPDP 2023 + UIDAI/RBI/CBDT norms — Aadhaar
+suppressed outright), `pci_dss` (PAN unreadable; out-of-scope content kept —
+compose with a privacy pack), `ccpa_deidentification`. All except
+rag_default are dual-target (guarantee-aware actions only). Packs compose
+strictest-wins, so selecting several (e.g. GDPR + PCI) is the intended way
+to satisfy overlapping law.
 
 - **Zero engine changes**: `compile_job_policy(packs, target, base_entities)`
   folds packs into existing JobSpec levers — `type_thresholds`,

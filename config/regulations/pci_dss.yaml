@@ -1,0 +1,44 @@
+# PCI DSS v4.0 — cardholder-data profile (Req. 3: render PAN unreadable
+# anywhere it is stored). Card numbers are suppressed outright — masked
+# storage of full PANs in an AI corpus has no defensible need. Cardholder
+# name + contact data are tokenized (they are cardholder data when stored
+# with the PAN); account identifiers hashed. Low confidence still masks:
+# a "probably a card number" left in clear text is a finding in any QSA
+# audit. Non-payment content (clinical terms, dates) is out of PCI scope
+# and explicitly kept — compose this pack with GDPR/PII/DPDP when broader
+# privacy law also applies (strictest rule wins per entity).
+regulation: PCI_DSS
+version: "2026.07"
+description: PCI DSS v4.0 cardholder data — PAN unreadable, account data hashed
+default_action: suppress
+below_threshold: mask_anyway
+rules:
+  # -- account data (Req. 3)
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: ACCOUNT_NUMBER, action: hash_irreversible }
+  # -- cardholder identity + contact data
+  - { entity: PERSON,         action: hmac_tokenize }
+  - { entity: EMAIL,          action: hmac_tokenize }
+  - { entity: PHONE,          action: hmac_tokenize }
+  - { entity: ADDRESS,        action: hmac_tokenize }
+  - { entity: LOCATION,       action: hmac_tokenize }
+  - { entity: ZIP,            action: generalize }
+  - { entity: PINCODE,        action: generalize }
+  # -- other identifiers that ride along in payment records
+  - { entity: SSN,            action: suppress }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            action: hash_irreversible }
+  - { entity: PASSPORT,       action: hash_irreversible }
+  - { entity: IP,             action: hash_irreversible }
+  - { entity: URL,            action: hash_irreversible }
+  - { entity: DOB,            action: generalize }
+  # -- out of PCI scope: keep for utility (compose with a privacy pack if
+  #    broader law applies)
+  - { entity: DATE,           action: keep }
+  - { entity: AGE,            action: keep }
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  - { entity: ORG,            action: keep }
+  - { entity: ORGANIZATION,   action: keep }
+  - { entity: MRN,            action: hash_irreversible }

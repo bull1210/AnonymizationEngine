@@ -35,12 +35,49 @@ def _pack(**overrides) -> RegulationPack:
     return RegulationPack.model_validate(base)
 
 
+#: Every pack shipped in config/regulations — extend when adding packs.
+SHIPPED_PACKS = (
+    "training_default", "rag_default", "hipaa_safe_harbor",
+    "gdpr_pseudonymization", "pii_protection", "india_dpdp",
+    "pci_dss", "ccpa_deidentification",
+)
+
+
 class TestPackLoading:
+    def test_shipped_pack_list_is_complete(self) -> None:
+        assert {p.stem for p in REGS.glob("*.yaml")} == set(SHIPPED_PACKS)
+
     def test_shipped_packs_load_with_provenance_hash(self) -> None:
-        for name in ("training_default", "rag_default", "hipaa_safe_harbor"):
+        for name in SHIPPED_PACKS:
             pack = load_pack(REGS / f"{name}.yaml")
             assert len(pack.sha256) == 64
             assert pack.default_action == "suppress"
+
+    def test_shipped_packs_compile_for_their_targets(self) -> None:
+        """Every pack must compile cleanly for every target it claims —
+        a pack that loads but explodes at job launch is a broken ship."""
+        for name in SHIPPED_PACKS:
+            pack = load_pack(REGS / f"{name}.yaml")
+            for target in compatible_targets(pack):
+                compiled = compile_job_policy([pack], target)
+                assert compiled["strategy_overrides"], name
+
+    def test_enterprise_packs_are_dual_target(self) -> None:
+        """All packs except rag_default use guarantee-aware actions only, so
+        they serve both training and rag jobs."""
+        for name in SHIPPED_PACKS:
+            pack = load_pack(REGS / f"{name}.yaml")
+            expected = {"rag"} if name == "rag_default" else {"rag", "training"}
+            assert compatible_targets(pack) == expected, name
+
+    def test_multi_regulation_composition_is_strictest(self) -> None:
+        """GDPR (tokenize EMAIL) + PII baseline (hash EMAIL) => hash wins;
+        thresholds compose to the lowest."""
+        packs = load_packs(REGS, ["gdpr_pseudonymization", "pii_protection"])
+        rule = compose(packs, "EMAIL")
+        assert rule.action == "hash_irreversible"
+        assert rule.min_confidence == 0.0          # pii pack has no threshold
+        assert rule.below_threshold == "mask_anyway"
 
     def test_unknown_key_rejected(self) -> None:
         with pytest.raises(Exception):

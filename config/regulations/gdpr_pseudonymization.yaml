@@ -1,0 +1,44 @@
+# GDPR (EU 2016/679) — pseudonymization profile (Art. 4(5), Art. 25, Art. 32).
+# Personal data is anything relating to an identifiable natural person; the
+# CJEU treats IP addresses and location as personal data. Direct identifiers
+# are tokenized (per-document placeholders under training, stable pseudonyms
+# under rag — hmac_tokenize is guarantee-aware); government/financial numbers
+# are irreversibly removed (data-minimization: no lawful basis to retain them
+# in AI corpora); quasi-identifiers are generalized to blunt re-identification
+# by combination. Gray-zone findings go to review (Art. 5(2) accountability —
+# a silent keep is indefensible).
+regulation: GDPR_pseudonymization
+version: "2026.07"
+description: EU GDPR pseudonymization — tokenize direct identifiers, minimize special-category data
+default_action: suppress
+below_threshold: review
+rules:
+  # -- direct identifiers of a natural person
+  - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: ADDRESS,        min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.75, action: hmac_tokenize }   # Breyer: personal data
+  - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
+  # -- national / financial identifiers: minimize outright
+  - { entity: SSN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: PASSPORT,       min_confidence: 0.70, action: hash_irreversible }
+  - { entity: CREDIT_CARD,    min_confidence: 0.70, action: suppress }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
+  - { entity: AADHAAR,        min_confidence: 0.70, action: suppress }
+  - { entity: PAN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }
+  # -- quasi-identifiers: generalize (re-identification by combination)
+  - { entity: DOB,            min_confidence: 0.70, action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  - { entity: ZIP,            min_confidence: 0.70, action: generalize }
+  - { entity: PINCODE,        min_confidence: 0.70, action: generalize }
+  - { entity: AGE,            min_confidence: 0.70, action: generalize }
+  # -- special-category health data (Art. 9): content kept, identifiers above
+  #    already unlink it; organizations are not natural persons
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  - { entity: ORG,            min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: ORGANIZATION,   min_confidence: 0.80, action: hmac_tokenize }

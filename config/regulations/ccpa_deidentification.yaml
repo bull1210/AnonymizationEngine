@@ -1,0 +1,37 @@
+# CCPA/CPRA (California Civil Code §1798.140) — de-identification profile.
+# §1798.140(m): de-identified data must not be reasonably capable of being
+# associated with a consumer, with technical safeguards in place. Direct
+# identifiers tokenized; government/financial identifiers removed;
+# household-level quasi-identifiers (address, ZIP, dates) generalized or
+# tokenized — CCPA uniquely covers "household" data, so address gets the
+# same treatment as a personal identifier. Gray zone -> review.
+regulation: CCPA_deidentification
+version: "2026.07"
+description: California CCPA/CPRA de-identification — consumer + household identifiers
+default_action: suppress
+below_threshold: review
+rules:
+  - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: ADDRESS,        min_confidence: 0.70, action: hmac_tokenize }  # household data
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.75, action: hash_irreversible } # unique online identifier
+  - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
+  - { entity: SSN,            min_confidence: 0.70, action: suppress }
+  - { entity: PASSPORT,       min_confidence: 0.70, action: hash_irreversible }
+  - { entity: CREDIT_CARD,    min_confidence: 0.70, action: suppress }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
+  - { entity: AADHAAR,        min_confidence: 0.70, action: suppress }
+  - { entity: PAN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: DOB,            min_confidence: 0.70, action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  - { entity: ZIP,            min_confidence: 0.70, action: generalize }
+  - { entity: PINCODE,        min_confidence: 0.70, action: generalize }
+  - { entity: AGE,            min_confidence: 0.70, action: generalize }
+  - { entity: ORG,            min_confidence: 0.85, action: hmac_tokenize }
+  - { entity: ORGANIZATION,   min_confidence: 0.85, action: hmac_tokenize }
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }

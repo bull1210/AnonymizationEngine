@@ -1,0 +1,37 @@
+# Generic enterprise PII baseline (NIST SP 800-122 flavored) — the strict
+# default for organizations without a single governing regulation. Direct
+# identifiers are removed or tokenized; quasi-identifiers generalized.
+# below_threshold: mask_anyway — when in doubt, mask (over-masking is the
+# safe failure mode; this pack trades recall of text utility for zero
+# tolerance on identifier leakage).
+regulation: PII_protection
+version: "2026.07"
+description: Strict enterprise PII baseline — mask on any suspicion (NIST 800-122 aligned)
+default_action: suppress
+below_threshold: mask_anyway
+rules:
+  - { entity: PERSON,         action: hmac_tokenize }
+  - { entity: EMAIL,          action: hash_irreversible }
+  - { entity: PHONE,          action: hash_irreversible }
+  - { entity: ADDRESS,        action: hmac_tokenize }
+  - { entity: LOCATION,       action: hmac_tokenize }
+  - { entity: IP,             action: hash_irreversible }
+  - { entity: URL,            action: hash_irreversible }
+  - { entity: SSN,            action: suppress }
+  - { entity: PASSPORT,       action: suppress }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: ACCOUNT_NUMBER, action: suppress }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            action: suppress }
+  - { entity: MRN,            action: suppress }
+  - { entity: DOB,            action: generalize }
+  - { entity: DATE,           action: date_shift }
+  - { entity: ZIP,            action: generalize }
+  - { entity: PINCODE,        action: generalize }
+  - { entity: AGE,            action: generalize }
+  - { entity: ORG,            action: hmac_tokenize }
+  - { entity: ORGANIZATION,   action: hmac_tokenize }
+  # business/clinical content is not PII per se — preserve utility
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
