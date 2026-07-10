@@ -1,0 +1,34 @@
+# Mechanical conversion of masking_policy.yaml's `rag` target into a
+# regulation pack — bit-identical to selecting no regulations (see
+# tests/test_policyengine.py). Native strategy actions are used so the
+# executing strategies match the base policy exactly.
+regulation: rag_default
+version: "1.0"
+description: Baseline consistent pseudonymization (converted from masking_policy.yaml rag target)
+default_action: suppress
+below_threshold: keep
+rules:
+  - { entity: PERSON,         min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: ORG,            min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: ORGANIZATION,   min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: LOCATION,       min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: ADDRESS,        min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: EMAIL,          min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: URL,            min_confidence: 0.5, action: suppress }
+  - { entity: IP,             min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: CREDIT_CARD,    min_confidence: 0.5, action: fpe }
+  - { entity: PHONE,          min_confidence: 0.5, action: fpe }
+  - { entity: SSN,            min_confidence: 0.5, action: fpe }
+  - { entity: AADHAAR,        min_confidence: 0.5, action: fpe }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.5, action: fpe }
+  - { entity: PAN,            min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: PASSPORT,       min_confidence: 0.5, action: hmac_pseudonym }
+  - { entity: MRN,            min_confidence: 0.5, action: fpe }
+  - { entity: DATE,           min_confidence: 0.5, action: keep }
+  - { entity: DOB,            min_confidence: 0.5, action: generalize }
+  - { entity: ZIP,            min_confidence: 0.5, action: keep }
+  - { entity: PINCODE,        min_confidence: 0.5, action: keep }
+  - { entity: AGE,            min_confidence: 0.5, action: keep }
+  - { entity: MEDICATION,     min_confidence: 0.5, action: keep }
+  - { entity: DIAGNOSIS,      min_confidence: 0.5, action: keep }
+  - { entity: PROCEDURE,      min_confidence: 0.5, action: keep }

@@ -1,0 +1,35 @@
+# Mechanical conversion of masking_policy.yaml's `training` target into a
+# regulation pack. A job selecting [training_default] behaves bit-identically
+# to one selecting no regulations (pinned by tests/test_policyengine.py) —
+# strategy overrides preserve the base entry's token/indexed/params, and
+# every threshold matches the 0.5 default.
+regulation: training_default
+version: "1.0"
+description: Baseline irreversible masking (converted from masking_policy.yaml training target)
+default_action: suppress
+below_threshold: keep
+rules:
+  - { entity: PERSON,         min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: ORG,            min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: ORGANIZATION,   min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: LOCATION,       min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: ADDRESS,        min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: EMAIL,          min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: PHONE,          min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: URL,            min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: IP,             min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: MEDICATION,     min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: DIAGNOSIS,      min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: PROCEDURE,      min_confidence: 0.5, action: placeholder_indexed }
+  - { entity: DATE,           min_confidence: 0.5, action: date_shift }
+  - { entity: DOB,            min_confidence: 0.5, action: generalize }
+  - { entity: ZIP,            min_confidence: 0.5, action: generalize }
+  - { entity: PINCODE,        min_confidence: 0.5, action: generalize }
+  - { entity: AGE,            min_confidence: 0.5, action: generalize }
+  - { entity: CREDIT_CARD,    min_confidence: 0.5, action: suppress }
+  - { entity: SSN,            min_confidence: 0.5, action: suppress }
+  - { entity: AADHAAR,        min_confidence: 0.5, action: suppress }
+  - { entity: PAN,            min_confidence: 0.5, action: suppress }
+  - { entity: PASSPORT,       min_confidence: 0.5, action: suppress }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.5, action: suppress }
+  - { entity: MRN,            min_confidence: 0.5, action: suppress }

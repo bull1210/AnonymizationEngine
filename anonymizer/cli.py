@@ -49,6 +49,18 @@ def main(argv: list[str] | None = None) -> int:
                         "so receipt idempotency dedups reprocessed documents")
     p.add_argument("--flush-after", type=float, default=300.0,
                    help="seconds before an incomplete document is emitted anyway")
+    p.add_argument("--regulations", default=None,
+                   help="comma-separated regulation pack names (e.g. "
+                        "hipaa_safe_harbor) — per-entity thresholds/actions "
+                        "compiled into the job; omit for the base masking policy")
+    p.add_argument("--packs-dir", default="/etc/anonymizer/regulations",
+                   help="directory holding <name>.yaml regulation packs")
+    p.add_argument("--policy", default="/etc/anonymizer/masking_policy.yaml",
+                   help="base masking policy — entities it defines that no "
+                        "pack covers are compiled to fail-closed suppression")
+    p.add_argument("--review-dir", default=None,
+                   help="where gray-zone (below-threshold, below_threshold: "
+                        "review) findings are appended as review.jsonl")
 
     p = sub.add_parser("serve", help="run the dry-run/preview FastAPI service")
     p.add_argument("--config", default="config/app.yaml")
@@ -77,9 +89,22 @@ def _dispatch(args: argparse.Namespace) -> int:
             "tenant_id": args.tenant,
             "confidence_threshold": args.threshold,
         }
+        packs = None
+        if args.regulations:
+            from .core.policyload import load_policy_yaml
+            from .policyengine import compile_job_policy, load_packs
+
+            names = [n.strip() for n in args.regulations.split(",") if n.strip()]
+            packs = load_packs(args.packs_dir, names)
+            base = load_policy_yaml(args.policy)
+            base_entities = {e for (t, e) in base.entries if t == args.target}
+            job.update(compile_job_policy(packs, args.target, base_entities))
+            logging.getLogger(__name__).info(
+                "regulations active: %s", job["policy_version"])
         return run_bridge(args.bootstrap, args.topic, args.group,
                           args.text_store_url, args.out_dir, job,
-                          flush_after_s=args.flush_after)
+                          flush_after_s=args.flush_after,
+                          packs=packs, review_dir=args.review_dir)
 
     if args.cmd == "validate-config":
         from .core.policyload import load_policy_yaml

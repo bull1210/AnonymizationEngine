@@ -146,6 +146,13 @@ consistency, 0 false merges).
   offset), fetches the canonical extracted text from the extraction service
   (`GET /text/{doc_id}`), maps detection entity names onto the policy
   vocabulary, and feeds the worker's directory queue.
+- Regulation packs (`anonymizer/policyengine.py` + `config/regulations/`):
+  versioned per-regulation rules — entity, per-entity `min_confidence`,
+  action — selected per job via `anonymizer bridge --regulations
+  hipaa_safe_harbor`. Compiled into JobSpec levers (zero engine changes),
+  provenance recorded in every receipt, unknown entities fail closed,
+  gray-zone findings land in a review sink. Design: platform
+  `docs/07_POLICY_ENGINE_DESIGN.md`.
 - The `files.masked` event is appended to `output/events.jsonl`; wire the
   Kafka producer in `Worker._publish_masked` when a broker is configured.
 - Tests: `pytest` runs 56+ tests incl. Hypothesis property tests; air-gapped

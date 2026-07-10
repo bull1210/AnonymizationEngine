@@ -1,0 +1,66 @@
+# HIPAA Safe Harbor worked example (docs/07_POLICY_ENGINE_DESIGN.md §5.1).
+# hmac_tokenize is guarantee-aware: per-document placeholders under the
+# `training` target, stable HMAC pseudonyms under `rag`. hash_irreversible
+# executes as suppression in Phase 1 (hash-suffix render is Phase 2).
+# Gray-zone findings (below min_confidence) go to the review sink.
+regulation: HIPAA_safe_harbor
+version: "2026.07"
+description: 18-identifier Safe Harbor de-identification (worked example)
+default_action: suppress
+below_threshold: review
+rules:
+  - entity: SSN
+    min_confidence: 0.80
+    action: hash_irreversible
+  - entity: PHONE
+    min_confidence: 0.80
+    action: hash_irreversible
+  - entity: DOB
+    min_confidence: 0.75
+    action: generalize
+    params: { granularity: year }
+  - entity: PERSON
+    min_confidence: 0.85
+    action: hmac_tokenize
+    render: "[PERSON-{index}]"
+  - entity: LOCATION
+    min_confidence: 0.80
+    action: hmac_tokenize
+  - entity: ADDRESS
+    min_confidence: 0.80
+    action: hmac_tokenize
+  - entity: EMAIL
+    min_confidence: 0.80
+    action: hash_irreversible
+  - entity: DATE
+    min_confidence: 0.75
+    action: generalize
+    params: { granularity: year }
+  - entity: AGE
+    min_confidence: 0.75
+    action: generalize
+    params: { over_89_bracket: true }
+  - entity: MRN
+    min_confidence: 0.75
+    action: hash_irreversible
+  - entity: ACCOUNT_NUMBER
+    min_confidence: 0.75
+    action: hash_irreversible
+  - entity: IP
+    min_confidence: 0.80
+    action: hash_irreversible
+  - entity: URL
+    min_confidence: 0.80
+    action: hash_irreversible
+  - entity: ZIP
+    min_confidence: 0.75
+    action: generalize
+  # Clinical content is NOT a Safe Harbor identifier — de-identification
+  # removes identifiers, not medical facts. Explicit keeps, otherwise the
+  # fail-closed default would suppress them.
+  - entity: MEDICATION
+    action: keep
+  - entity: DIAGNOSIS
+    action: keep
+  - entity: PROCEDURE
+    action: keep

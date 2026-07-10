@@ -110,6 +110,49 @@ class TestStaleFlush:
         assert list(tmp_path.glob("*.json")) == []
 
 
+class TestRegulations:
+    def _pack(self):  # noqa: ANN202
+        from anonymizer.policyengine import RegulationPack
+        return RegulationPack.model_validate({
+            "regulation": "hipaa", "version": "2026.07",
+            "below_threshold": "review",
+            "rules": [
+                {"entity": "SSN", "min_confidence": 0.8, "action": "hash_irreversible"},
+                {"entity": "PERSON", "min_confidence": 0.85, "action": "hmac_tokenize"},
+            ],
+        })
+
+    def test_decisions_attached_and_gray_zone_written_to_review_sink(
+        self, tmp_path: Path
+    ) -> None:
+        review_dir = tmp_path / "review"
+        a = JobAssembler(_fetch, tmp_path / "out", JOB,
+                         packs=[self._pack()], review_dir=review_dir)
+        a.add(_result("a" * 64, 0, total=1, offset=0, findings=[
+            {"entity": "US_SSN", "start": 6, "end": 10,
+             "confidence": 0.94, "tier": "regex_checksum", "validated": True},
+            {"entity": "PERSON", "start": 0, "end": 5,
+             "confidence": 0.82, "tier": "ml_ner", "validated": False},
+        ]))
+
+        msg = json.loads(next((tmp_path / "out").glob("*.json")).read_text(encoding="utf-8"))
+        by_entity = {d["entity"]: d for d in msg["policy_decisions"]}
+        assert by_entity["SSN"].get("outcome") == "apply"      # 0.94 >= 0.80
+        assert by_entity["PERSON"]["outcome"] == "review"      # 0.82 < 0.85
+        assert by_entity["SSN"]["rule"] == "hipaa/2026.07#SSN"
+
+        record = json.loads(
+            (review_dir / "review.jsonl").read_text(encoding="utf-8").strip())
+        assert record["decisions"][0]["entity"] == "PERSON"
+        assert a.reviews == 1
+
+    def test_no_packs_means_no_decisions_key(self, tmp_path: Path) -> None:
+        a = JobAssembler(_fetch, tmp_path, JOB)
+        a.add(_result("a" * 64, 0, total=1, offset=0))
+        msg = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
+        assert "policy_decisions" not in msg
+
+
 class TestEntityMapCoverage:
     def test_high_risk_detection_types_all_mapped_or_native(self) -> None:
         """Every entity the detection engine emits must either map to a policy

@@ -60,17 +60,30 @@ class _DocState:
 
 class JobAssembler:
     """Pure aggregation core — no Kafka, fully unit-testable. ``fetch_text``
-    resolves a doc_id to the canonical extracted text (HTTP in production)."""
+    resolves a doc_id to the canonical extracted text (HTTP in production).
+
+    With ``packs`` (regulation packs, see anonymizer.policyengine) each
+    emitted job also gets per-finding policy decisions; findings whose
+    outcome is ``review`` (gray-zone confidence) are appended to
+    ``review_dir/review.jsonl``. The job dict itself should already carry
+    the pack-compiled thresholds/overrides (``compile_job_policy``)."""
 
     def __init__(self, fetch_text: Callable[[str], str], out_dir: str | Path,
-                 job: dict, flush_after_s: float = 300.0) -> None:
+                 job: dict, flush_after_s: float = 300.0,
+                 packs: list | None = None,
+                 review_dir: str | Path | None = None) -> None:
         self._fetch_text = fetch_text
         self._out_dir = Path(out_dir)
         self._out_dir.mkdir(parents=True, exist_ok=True)
         self._job = job
         self._flush_after_s = flush_after_s
+        self._packs = packs or []
+        self._review_dir = Path(review_dir) if review_dir else None
+        if self._review_dir is not None:
+            self._review_dir.mkdir(parents=True, exist_ok=True)
         self._docs: dict[str, _DocState] = {}
         self.emitted = 0
+        self.reviews = 0
 
     def add(self, result: dict) -> None:
         """Ingest one ScanResult dict; emit the document if now complete."""
@@ -129,12 +142,39 @@ class JobAssembler:
             "findings": findings,
             "job": self._job,
         }
+        if self._packs:
+            message["policy_decisions"] = self._decide(safe_id, doc_id, findings)
         # tmp + rename: DirectorySource globs *.json — never sees half a file
         tmp = self._out_dir / f"{safe_id}.tmp"
         tmp.write_text(json.dumps(message, indent=2), encoding="utf-8")
         tmp.replace(self._out_dir / f"{safe_id}.json")
         self.emitted += 1
         log.info("job emitted file=%s findings=%d", safe_id, len(findings))
+
+    def _decide(self, safe_id: str, doc_id: str, findings: list[dict]) -> list[dict]:
+        """Resolve regulation decisions per finding; gray-zone (review)
+        findings are appended to the review sink. The document still
+        proceeds — a review span stays unmasked exactly like keep, but with
+        an audit trail a human can work through."""
+        from .policyengine import resolve  # local: packs are optional
+
+        decisions = resolve(findings, self._packs, self._job["downstream_target"])
+        reviews = [d.to_dict() for d in decisions if d.outcome == "review"]
+        if reviews and self._review_dir is not None:
+            record = json.dumps({
+                "file_id": safe_id, "doc_id": doc_id,
+                "job_id": self._job.get("job_id"),
+                "policy_version": self._job.get("policy_version"),
+                "ts": time.time(), "decisions": reviews,
+            })
+            with (self._review_dir / "review.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(record + "\n")
+            self.reviews += len(reviews)
+        elif reviews:
+            log.warning("%d review-outcome finding(s) in %s but no --review-dir "
+                        "configured — recorded in the job message only",
+                        len(reviews), safe_id)
+        return [d.to_dict() for d in decisions]
 
 
 def http_text_fetcher(base_url: str, timeout: float = 30.0) -> Callable[[str], str]:
@@ -146,11 +186,14 @@ def http_text_fetcher(base_url: str, timeout: float = 30.0) -> Callable[[str], s
 
 
 def run_bridge(bootstrap: str, topic: str, group: str, text_store_url: str,
-               out_dir: str, job: dict, flush_after_s: float = 300.0) -> int:
+               out_dir: str, job: dict, flush_after_s: float = 300.0,
+               packs: list | None = None,
+               review_dir: str | None = None) -> int:
     from confluent_kafka import Consumer  # optional dep: pip install ".[kafka]"
 
     assembler = JobAssembler(
-        http_text_fetcher(text_store_url), out_dir, job, flush_after_s
+        http_text_fetcher(text_store_url), out_dir, job, flush_after_s,
+        packs=packs, review_dir=review_dir,
     )
     consumer = Consumer({
         "bootstrap.servers": bootstrap,

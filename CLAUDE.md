@@ -75,6 +75,41 @@ needs none.
   `bridge-{target}` is stable on purpose — receipt idempotency
   (file_id, job_id, policy_version, canonicalizer_version) dedups replays
 
+## Policy engine (regulation packs, Phase 1 — platform docs/07)
+
+`anonymizer/policyengine.py` + `config/regulations/*.yaml`: versioned
+regulation packs (e.g. `hipaa_safe_harbor`) decide an action per entity at a
+per-entity confidence bar, replacing the single global threshold. Selected
+via `anonymizer bridge --regulations name1,name2` (also `--packs-dir`,
+`--policy`, `--review-dir`) or the platform harness `--regulations`.
+
+- **Zero engine changes**: `compile_job_policy(packs, target, base_entities)`
+  folds packs into existing JobSpec levers — `type_thresholds`,
+  `strategy_overrides` (same-strategy overrides preserve the base entry's
+  token/indexed/params via `Engine._entry_for`), and `policy_version`
+  (pack provenance → lands in receipts AND the idempotency key).
+- **Composition** across packs: strictest wins — action severity lattice
+  `keep < generalize < tokenize < hash_irreversible < suppress`, lowest
+  min_confidence, most aggressive below_threshold (`mask_anyway > review >
+  keep`).
+- **Fail closed twice**: entities no pack covers compile to
+  suppress-at-any-confidence via `base_entities` (execution must match
+  `resolve()` decisions — a pack is a complete policy, not an overlay);
+  `default_action` must be `suppress` (validator).
+- **Guarantee-aware actions**: `hmac_tokenize` → placeholder_indexed
+  (training) / hmac_pseudonym (rag); `hash_irreversible` → suppress in
+  Phase 1 (render templates like `[REDACTED-SSN-a8f3]` are Phase 2); linkable
+  strategies for training raise at compile.
+- **Bit-identical defaults**: `training_default`/`rag_default` are mechanical
+  conversions of masking_policy.yaml — tests prove output equality with and
+  without them; keep all three (masking_policy + the two packs) in sync.
+- **Review sink**: gray-zone findings (below min_confidence,
+  `below_threshold: review`) append to `review.jsonl`; the document still
+  proceeds with that span unmasked (keep semantics + audit trail).
+- Pack authoring note: regulations should explicitly `keep` non-identifier
+  content they intend to preserve (HIPAA keeps MEDICATION/DIAGNOSIS/
+  PROCEDURE — de-identification removes identifiers, not clinical facts).
+
 ## Worker message contract
 
 `Worker.process` expects `{"file_id", "text"?, "findings": [{entity_type,
