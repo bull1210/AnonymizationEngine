@@ -51,11 +51,22 @@ class RegexDetector:
             for m in pattern.finditer(text):
                 surface = m.group()
                 digits = "".join(c for c in surface if c.isdigit())
-                if etype == "CREDIT_CARD" and not (13 <= len(digits) <= 19 and luhn_valid(digits)):
+                # Require phone/card matches to look FORMATTED (a separator or a
+                # leading +). A bare run of digits is far more likely a
+                # coordinate, id, or measurement than a phone/card — this is
+                # what made numeric data files (ML datasets, logs) false-
+                # quarantine by the thousands. Real phones/cards in text
+                # almost always carry spaces, dashes, or a country-code +.
+                formatted = ("+" in surface) or any(c in " -()." for c in surface)
+                if etype == "CREDIT_CARD" and not (
+                    formatted and 13 <= len(digits) <= 19 and luhn_valid(digits)
+                ):
                     continue
-                if etype == "AADHAAR" and not (len(digits) == 12 and verhoeff_valid(digits)):
+                if etype == "AADHAAR" and not (
+                    formatted and len(digits) == 12 and verhoeff_valid(digits)
+                ):
                     continue
-                if etype == "PHONE" and not 10 <= len(digits) <= 14:
+                if etype == "PHONE" and not (formatted and 10 <= len(digits) <= 14):
                     continue
                 cands.append((m.start(), m.end(), rank, etype, conf))
 

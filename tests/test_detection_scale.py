@@ -18,14 +18,20 @@ def _types(text: str):  # noqa: ANN202
 class TestOverlapPrecedence:
     def test_card_beats_phone_on_same_digits(self) -> None:
         # a valid (Luhn) credit card must win over the phone pattern
-        got = _types("pay 4532015112830366 today")
-        assert got == [("CREDIT_CARD", 4, 20)]
+        # formatted (grouped) card — a valid card in real text carries spaces
+        got = _types("pay 4532 0151 1283 0366 today")
+        assert got == [("CREDIT_CARD", 4, 23)]
 
     def test_disjoint_matches_all_kept_and_sorted(self) -> None:
-        got = _types("ssn 123-45-6789 mail a@b.co ph 5551234567")
+        got = _types("ssn 123-45-6789 mail a@b.co ph 555-123-4567")
         kinds = [t for t, _, _ in got]
         assert "SSN" in kinds and "EMAIL" in kinds and "PHONE" in kinds
         assert got == sorted(got, key=lambda x: x[1])  # returned in position order
+
+    def test_bare_digit_run_not_flagged_as_phone_or_card(self) -> None:
+        # ML-dataset coordinates / ids: bare digit runs must NOT be PII —
+        # this is what made numeric files false-quarantine by the thousands.
+        assert _types('{"bbox": [123456789012], "id": 4111111111111111}') == []
 
     def test_spans_are_exact(self) -> None:
         text = "reach me at alice@example.com please"
