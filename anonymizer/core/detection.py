@@ -34,6 +34,38 @@ _PATTERNS: list[tuple[str, re.Pattern, float]] = [
 ]
 
 
+#: Dates and timestamps are the other big source of digit-run false positives,
+#: and the `formatted` guard below cannot catch them: a date carries exactly the
+#: dashes and spaces that make a digit run "look like" a phone number.
+#: `"date_captured": "2020-06-24 12:34:56"` yields the 10-digit run
+#: `2020-06-24 12` — formatted, in range, and utterly not a phone. One COCO
+#: annotation file quarantined on 3302 of these.
+_DATE_LIKE = re.compile(
+    r"""^(?:
+          \d{4}[-/. ]\d{1,2}[-/. ]\d{1,2}    # 2020-06-24, 2020/06/24
+        | \d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}    # 24-06-2020, 06/24/20
+    )""",
+    re.VERBOSE,
+)
+
+
+def _is_temporal(text: str, start: int, end: int, surface: str) -> bool:
+    """True when a digit run is part of a date or clock time, not a number
+    someone could dial. Checked on the surface AND its immediate neighbours:
+    the run `2020-06-24 12` is only recognisable as a timestamp by the `:`
+    that follows it."""
+    if _DATE_LIKE.match(surface):
+        return True
+    # A clock time continues through ':' on either side (12:34:56); a date or
+    # version string continues through '/' or '.'. Compare against a set, not
+    # with `in ":/."` — an empty neighbour (start/end of text) is a substring of
+    # any string, which would reject every phone number that ends a document.
+    neighbours = {"/", ":", "."}
+    before = text[start - 1] if start > 0 else ""
+    after = text[end] if end < len(text) else ""
+    return before in neighbours or after in neighbours
+
+
 class RegexDetector:
     """Structured-type detector. Validator-gated where possible (Luhn,
     Verhoeff) so confidence is meaningful. Priority order suppresses
@@ -58,6 +90,12 @@ class RegexDetector:
                 # quarantine by the thousands. Real phones/cards in text
                 # almost always carry spaces, dashes, or a country-code +.
                 formatted = ("+" in surface) or any(c in " -()." for c in surface)
+                # ...but "formatted" is exactly what a date looks like, so the
+                # numeric types also have to rule out dates and clock times.
+                if etype in ("CREDIT_CARD", "AADHAAR", "PHONE") and _is_temporal(
+                    text, m.start(), m.end(), surface
+                ):
+                    continue
                 if etype == "CREDIT_CARD" and not (
                     formatted and 13 <= len(digits) <= 19 and luhn_valid(digits)
                 ):
