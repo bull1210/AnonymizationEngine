@@ -1,0 +1,46 @@
+# Australia Privacy Act 1988 — Australian Privacy Principles (APP) profile.
+# APP 11 requires destruction or de-identification once the information is no
+# longer needed; the OAIC's de-identification guidance is risk-based rather
+# than a fixed identifier list, so this pack tokenizes direct identifiers and
+# generalizes quasi-identifiers. Two Australian specifics: the Tax File Number
+# has its own statutory rule (TFN Rule 2015 — collection restricted, retention
+# discouraged) so it is suppressed, and government-related identifiers must not
+# be adopted as an entity's own identifier (APP 9), which rules out using them
+# as pseudonym seeds — hence hash, not tokenize.
+regulation: Privacy_Act_Australia
+version: "2026.07"
+description: Australia Privacy Act / APPs — de-identify per APP 11, TFN suppressed, gov IDs hashed
+jurisdiction: Australia
+category: privacy
+default_action: suppress
+below_threshold: review
+rules:
+  - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: ADDRESS,        min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
+  # -- TFN: statutory restriction, no retention basis in an AI corpus
+  - { entity: SSN,            action: suppress }
+  # -- government-related identifiers (APP 9): hashed, never adopted as a
+  #    pseudonym seed
+  - { entity: PASSPORT,       min_confidence: 0.70, action: hash_irreversible }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }  # IHI
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
+  # -- quasi-identifiers
+  - { entity: DOB,            min_confidence: 0.70, action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  - { entity: ZIP,            min_confidence: 0.70, action: generalize }
+  - { entity: PINCODE,        min_confidence: 0.70, action: generalize }
+  - { entity: AGE,            min_confidence: 0.70, action: generalize }
+  # -- sensitive information (s.6): health facts kept, identity severed
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  - { entity: ORG,            action: keep }
+  - { entity: ORGANIZATION,   action: keep }

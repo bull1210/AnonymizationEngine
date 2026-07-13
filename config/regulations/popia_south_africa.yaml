@@ -1,0 +1,47 @@
+# South Africa POPIA (Protection of Personal Information Act, 2013).
+# s.6 exempts de-identified information that cannot be re-identified; s.26
+# lists "special personal information" (health, biometrics, religious or
+# political belief) whose processing is prohibited absent an authorization —
+# an AI corpus has none, so health *identifiers* are stripped and the ID
+# number (a widely-abused identifier encoding date of birth and citizenship)
+# is removed outright rather than tokenized. Note POPIA protects juristic
+# persons too (s.1 "data subject"), so organizations are tokenized here —
+# unlike the GDPR-family packs.
+regulation: POPIA_South_Africa
+version: "2026.07"
+description: South Africa POPIA — de-identification incl. juristic persons; ID numbers removed
+jurisdiction: South Africa
+category: privacy
+default_action: suppress
+below_threshold: review
+rules:
+  - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: ADDRESS,        min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
+  # -- SA ID number encodes DOB + citizenship: removing it is the only way to
+  #    stop re-identification by combination
+  - { entity: SSN,            action: suppress }
+  - { entity: PASSPORT,       action: suppress }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }
+  # -- quasi-identifiers
+  - { entity: DOB,            min_confidence: 0.70, action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  - { entity: ZIP,            min_confidence: 0.70, action: generalize }
+  - { entity: PINCODE,        min_confidence: 0.70, action: generalize }
+  - { entity: AGE,            min_confidence: 0.70, action: generalize }
+  # -- special personal information (s.26): the clinical fact is kept, its
+  #    link to a person is severed by the identifier rules above
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  # -- POPIA's "data subject" includes juristic persons — unlike GDPR
+  - { entity: ORG,            min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: ORGANIZATION,   min_confidence: 0.80, action: hmac_tokenize }

@@ -111,6 +111,10 @@ class RegulationPack(BaseModel):
     regulation: str
     version: str
     description: str = ""
+    #: Catalog metadata — the pack is the single source of truth for how it is
+    #: filed in a selection UI. Optional so a hand-written pack stays valid.
+    jurisdiction: str = ""      # EU, UK, US, India, Brazil, ... or Global
+    category: Literal["default", "baseline", "privacy", "sector", ""] = ""
     default_action: Literal["suppress"] = "suppress"  # fail closed, non-negotiable
     below_threshold: Literal["keep", "review", "mask_anyway"] = "keep"
     rules: list[Rule]

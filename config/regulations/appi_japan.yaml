@@ -1,0 +1,59 @@
+# Japan APPI (Act on the Protection of Personal Information, as amended 2020/2022).
+#
+# The defining constraint: APPI's "anonymously processed information"
+# (匿名加工情報, Art. 2(6)) must be processed so the individual cannot be
+# identified AND the personal information cannot be RESTORED. Art. 36 further
+# forbids retaining the deletion/replacement method that would allow
+# restoration.
+#
+# Consequence for this engine: direct identifiers use `hash_irreversible`,
+# never `hmac_tokenize`. Under a RAG job, hmac_tokenize would compile to a
+# stable HMAC pseudonym — unrestorable without the salt, but the salt exists,
+# and it is linkable across the corpus. That is "pseudonymously processed
+# information" (Art. 2(5)), a weaker category that stays regulated. To claim
+# the anonymously-processed exemption the identifier must simply be gone, so
+# this pack yields identical irreversible output under BOTH targets.
+#
+# Practical note: selecting this pack in RAG mode is legal and will run, but
+# it deliberately gives up cross-document linkage on identifiers — that is the
+# trade APPI demands, not a bug.
+regulation: APPI_Japan
+version: "2026.07"
+description: Japan APPI anonymously-processed information — identifiers irreversibly removed, never pseudonymized
+jurisdiction: Japan
+category: privacy
+default_action: suppress
+below_threshold: review
+rules:
+  # -- direct identifiers: irreversible in BOTH targets (Art. 36 — no
+  #    restoration method may survive)
+  - { entity: PERSON,         min_confidence: 0.75, action: hash_irreversible }
+  - { entity: EMAIL,          min_confidence: 0.70, action: hash_irreversible }
+  - { entity: PHONE,          min_confidence: 0.70, action: hash_irreversible }
+  - { entity: ADDRESS,        min_confidence: 0.70, action: hash_irreversible }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hash_irreversible }
+  - { entity: IP,             min_confidence: 0.70, action: hash_irreversible }
+  - { entity: URL,            min_confidence: 0.70, action: hash_irreversible }
+  # -- personal identification codes (Art. 2(2)): My Number, passport,
+  #    insurance and account numbers — removed outright
+  - { entity: SSN,            action: suppress }        # My Number
+  - { entity: PASSPORT,       action: suppress }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            action: suppress }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: ACCOUNT_NUMBER, action: suppress }
+  - { entity: MRN,            action: suppress }
+  # -- quasi-identifiers: generalized (Art. 36 also requires that singling-out
+  #    by combination be defeated)
+  - { entity: DOB,            action: generalize }
+  - { entity: DATE,           min_confidence: 0.70, action: date_shift }
+  - { entity: ZIP,            action: generalize }
+  - { entity: PINCODE,        action: generalize }
+  - { entity: AGE,            action: generalize }
+  # -- clinical content survives de-identification
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  # -- corporations are not "individuals" under APPI
+  - { entity: ORG,            action: keep }
+  - { entity: ORGANIZATION,   action: keep }

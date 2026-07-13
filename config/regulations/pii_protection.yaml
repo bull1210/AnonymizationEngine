@@ -6,7 +6,9 @@
 # tolerance on identifier leakage).
 regulation: PII_protection
 version: "2026.07"
-description: Strict enterprise PII baseline — mask on any suspicion (NIST 800-122 aligned)
+description: Strict enterprise PII baseline — mask on any suspicion (NIST SP 800-122 aligned)
+jurisdiction: Global
+category: baseline
 default_action: suppress
 below_threshold: mask_anyway
 rules:

@@ -5,6 +5,8 @@
 regulation: rag_default
 version: "1.0"
 description: Baseline consistent pseudonymization (converted from masking_policy.yaml rag target)
+jurisdiction: Global
+category: default
 default_action: suppress
 below_threshold: keep
 rules:

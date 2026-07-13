@@ -1,0 +1,57 @@
+# China PIPL (Personal Information Protection Law, 2021).
+#
+# This pack is deliberately stricter than the GDPR family, for two reasons
+# rooted in the statute:
+#
+#  * Art. 28 "sensitive personal information" expressly includes financial
+#    accounts, medical health, biometrics and *whereabouts/tracking*. Art. 29
+#    requires separate consent for its handling — which an AI training or RAG
+#    corpus does not have. Financial identifiers and location/whereabouts are
+#    therefore SUPPRESSED, not tokenized: a stable pseudonym for a person's
+#    movements is still a movement trail.
+#  * Art. 73(4) defines anonymization as processing after which the person
+#    "cannot be identified and the process cannot be reversed". Reversibility
+#    is judged on the whole system, so direct identifiers are removed rather
+#    than pseudonymized wherever the pseudonym adds no retrieval value.
+#
+# below_threshold: mask_anyway — a "probably a national ID" left in clear text
+# is not defensible under Art. 51 security obligations.
+regulation: PIPL_China
+version: "2026.07"
+description: China PIPL — sensitive personal information (financial, whereabouts) suppressed, not pseudonymized
+jurisdiction: China
+category: privacy
+default_action: suppress
+below_threshold: mask_anyway
+rules:
+  # -- sensitive personal information (Art. 28): suppressed at any confidence
+  - { entity: ACCOUNT_NUMBER, action: suppress }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: LOCATION,       action: suppress }   # whereabouts / tracking
+  - { entity: ADDRESS,        action: suppress }
+  - { entity: MRN,            action: suppress }   # medical health identifier
+  # -- national / government identifiers (resident ID class)
+  - { entity: SSN,            action: suppress }
+  - { entity: PASSPORT,       action: suppress }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            action: suppress }
+  # -- direct identifiers of a natural person
+  - { entity: PERSON,         min_confidence: 0.70, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.60, action: hash_irreversible }
+  - { entity: PHONE,          min_confidence: 0.60, action: hash_irreversible }
+  - { entity: IP,             min_confidence: 0.60, action: hash_irreversible }
+  - { entity: URL,            min_confidence: 0.60, action: hash_irreversible }
+  # -- quasi-identifiers
+  - { entity: DOB,            action: generalize }
+  - { entity: DATE,           min_confidence: 0.70, action: date_shift }
+  - { entity: ZIP,            action: generalize }
+  - { entity: PINCODE,        action: generalize }
+  - { entity: AGE,            action: generalize }
+  # -- clinical content is not personal information once identifiers are gone;
+  #    kept for corpus utility (the MRN above severs the link)
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  # -- legal persons are outside PIPL (it governs natural persons)
+  - { entity: ORG,            action: keep }
+  - { entity: ORGANIZATION,   action: keep }

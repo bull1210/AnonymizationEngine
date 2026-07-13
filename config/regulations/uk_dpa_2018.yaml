@@ -1,44 +1,43 @@
-# GDPR (EU 2016/679) — pseudonymization profile (Art. 4(5), Art. 25, Art. 32).
-# Personal data is anything relating to an identifiable natural person; the
-# CJEU treats IP addresses and location as personal data. Direct identifiers
-# are tokenized (per-document placeholders under training, stable pseudonyms
-# under rag — hmac_tokenize is guarantee-aware); government/financial numbers
-# are irreversibly removed (data-minimization: no lawful basis to retain them
-# in AI corpora); quasi-identifiers are generalized to blunt re-identification
-# by combination. Gray-zone findings go to review (Art. 5(2) accountability —
-# a silent keep is indefensible).
-regulation: GDPR_pseudonymization
+# UK Data Protection Act 2018 + UK GDPR (the retained EU regulation).
+# Substantively the same de-identification stance as EU GDPR: direct
+# identifiers tokenized, national/financial numbers minimized outright,
+# quasi-identifiers generalized, gray-zone findings sent to review
+# (accountability principle, DPA 2018 s.2). Shipped as its own pack rather
+# than an alias so a UK controller can find their law by name and so the
+# receipt records the UK basis — divergence from the EU pack, if the ICO's
+# guidance moves, is then a one-file change.
+regulation: UK_DPA_2018
 version: "2026.07"
-description: EU GDPR pseudonymization — tokenize direct identifiers, minimize special-category data
-jurisdiction: EU
+description: UK GDPR / DPA 2018 pseudonymization — tokenize direct identifiers, minimize statutory identifiers
+jurisdiction: UK
 category: privacy
 default_action: suppress
 below_threshold: review
 rules:
-  # -- direct identifiers of a natural person
+  # -- direct identifiers of a living individual
   - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
   - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
   - { entity: PHONE,          min_confidence: 0.75, action: hmac_tokenize }
   - { entity: ADDRESS,        min_confidence: 0.75, action: hmac_tokenize }
   - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
-  - { entity: IP,             min_confidence: 0.75, action: hmac_tokenize }   # Breyer: personal data
+  - { entity: IP,             min_confidence: 0.75, action: hmac_tokenize }
   - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
-  # -- national / financial identifiers: minimize outright
-  - { entity: SSN,            min_confidence: 0.70, action: hash_irreversible }
+  # -- statutory / financial identifiers: data minimization
+  - { entity: SSN,            min_confidence: 0.70, action: hash_irreversible }  # NI number
   - { entity: PASSPORT,       min_confidence: 0.70, action: hash_irreversible }
   - { entity: CREDIT_CARD,    min_confidence: 0.70, action: suppress }
   - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
   - { entity: AADHAAR,        min_confidence: 0.70, action: suppress }
   - { entity: PAN,            min_confidence: 0.70, action: hash_irreversible }
-  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }
-  # -- quasi-identifiers: generalize (re-identification by combination)
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }  # NHS number
+  # -- quasi-identifiers
   - { entity: DOB,            min_confidence: 0.70, action: generalize }
   - { entity: DATE,           min_confidence: 0.75, action: date_shift }
   - { entity: ZIP,            min_confidence: 0.70, action: generalize }
   - { entity: PINCODE,        min_confidence: 0.70, action: generalize }
   - { entity: AGE,            min_confidence: 0.70, action: generalize }
-  # -- special-category health data (Art. 9): content kept, identifiers above
-  #    already unlink it; organizations are not natural persons
+  # -- special-category health data: clinical facts kept, identifiers above
+  #    already unlink them
   - { entity: MEDICATION,     action: keep }
   - { entity: DIAGNOSIS,      action: keep }
   - { entity: PROCEDURE,      action: keep }

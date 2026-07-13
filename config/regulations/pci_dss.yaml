@@ -10,6 +10,8 @@
 regulation: PCI_DSS
 version: "2026.07"
 description: PCI DSS v4.0 cardholder data — PAN unreadable, account data hashed
+jurisdiction: Global
+category: sector
 default_action: suppress
 below_threshold: mask_anyway
 rules:

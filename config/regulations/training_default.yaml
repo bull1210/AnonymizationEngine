@@ -6,6 +6,8 @@
 regulation: training_default
 version: "1.0"
 description: Baseline irreversible masking (converted from masking_policy.yaml training target)
+jurisdiction: Global
+category: default
 default_action: suppress
 below_threshold: keep
 rules:

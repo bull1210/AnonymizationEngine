@@ -5,7 +5,9 @@
 # Gray-zone findings (below min_confidence) go to the review sink.
 regulation: HIPAA_safe_harbor
 version: "2026.07"
-description: 18-identifier Safe Harbor de-identification (worked example)
+description: HIPAA §164.514(b)(2) 18-identifier Safe Harbor de-identification
+jurisdiction: US
+category: sector
 default_action: suppress
 below_threshold: review
 rules:

@@ -1,0 +1,43 @@
+# Brazil LGPD (Lei 13.709/2018) — anonymization / pseudonymization profile.
+# Art. 5(XI) defines pseudonymization; Art. 12 exempts truly anonymized data
+# from the law. Structurally GDPR-shaped, with two Brazilian specifics: CPF
+# and CNPJ are the everyday national identifiers and appear constantly in
+# business documents, so tax/ID numbers are removed outright rather than
+# tokenized (no lawful basis to retain them in an AI corpus). Sensitive data
+# (Art. 5(II)) — health, biometrics — has its identifiers stripped while the
+# clinical content survives.
+regulation: LGPD_Brazil
+version: "2026.07"
+description: Brazil LGPD — pseudonymize direct identifiers, remove CPF/CNPJ-class tax IDs
+jurisdiction: Brazil
+category: privacy
+default_action: suppress
+below_threshold: review
+rules:
+  - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: ADDRESS,        min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
+  # -- national tax / ID numbers (CPF, CNPJ, RG class): removed outright
+  - { entity: SSN,            action: suppress }
+  - { entity: PAN,            action: suppress }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PASSPORT,       min_confidence: 0.70, action: hash_irreversible }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }
+  # -- quasi-identifiers
+  - { entity: DOB,            min_confidence: 0.70, action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  - { entity: ZIP,            min_confidence: 0.70, action: generalize }   # CEP
+  - { entity: PINCODE,        min_confidence: 0.70, action: generalize }
+  - { entity: AGE,            min_confidence: 0.70, action: generalize }
+  # -- sensitive data: clinical facts kept, identity already severed
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  - { entity: ORG,            min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: ORGANIZATION,   min_confidence: 0.80, action: hmac_tokenize }

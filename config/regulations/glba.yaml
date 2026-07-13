@@ -1,0 +1,55 @@
+# US GLBA (Gramm-Leach-Bliley Act) — nonpublic personal information (NPI).
+# The Safeguards Rule (16 CFR 314) requires protecting customer information;
+# the Privacy Rule (16 CFR 313) defines NPI as any personally identifiable
+# financial information a consumer gives a financial institution. Account and
+# card numbers are the core NPI — they are removed outright, because the
+# Safeguards Rule's encryption obligation has no equivalent for a plaintext
+# AI corpus. Customer identity and contact data are tokenized.
+#
+# below_threshold: mask_anyway — under the Safeguards Rule a "probably an
+# account number" left in the clear is an unencrypted customer record, and
+# 16 CFR 314.4(j) would make it a reportable event. Over-masking is the cheap
+# error here.
+#
+# Scope note: GLBA is a financial-privacy statute. Clinical content and
+# organizations are out of scope and explicitly kept — compose this pack with
+# a privacy pack (GDPR, CCPA, ...) when broader law also applies; strictest
+# rule wins per entity.
+regulation: GLBA
+version: "2026.07"
+description: GLBA nonpublic personal information — account/card data removed, customer identity tokenized
+jurisdiction: US
+category: sector
+default_action: suppress
+below_threshold: mask_anyway
+rules:
+  # -- core NPI: financial account data
+  - { entity: ACCOUNT_NUMBER, action: suppress }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: SSN,            action: suppress }
+  # -- customer identity + contact data (NPI when held by the institution)
+  - { entity: PERSON,         min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.70, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.70, action: hmac_tokenize }
+  - { entity: ADDRESS,        min_confidence: 0.70, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.70, action: hash_irreversible }
+  - { entity: URL,            min_confidence: 0.70, action: hash_irreversible }
+  # -- other identifiers that ride along in financial records
+  - { entity: PASSPORT,       action: hash_irreversible }   # KYC documents
+  - { entity: PAN,            action: hash_irreversible }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: MRN,            action: hash_irreversible }
+  # -- quasi-identifiers
+  - { entity: DOB,            action: generalize }
+  - { entity: ZIP,            action: generalize }
+  - { entity: PINCODE,        action: generalize }
+  - { entity: AGE,            action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  # -- out of GLBA scope: kept for utility (compose with a privacy pack if
+  #    broader law applies)
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  - { entity: ORG,            action: keep }
+  - { entity: ORGANIZATION,   action: keep }

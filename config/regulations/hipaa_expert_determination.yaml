@@ -1,0 +1,60 @@
+# HIPAA §164.514(b)(1) — Expert Determination de-identification.
+#
+# READ THIS BEFORE SELECTING THE PACK. Expert Determination is the *other*
+# HIPAA route: instead of mechanically stripping the 18 Safe Harbor
+# identifiers, a qualified statistician determines that the risk of
+# re-identification is "very small" and DOCUMENTS that determination. The
+# regulation permits retaining data Safe Harbor would strip — most usefully,
+# full dates, which Safe Harbor reduces to the year and which clinical
+# research needs (time-to-event, dosing intervals, readmission windows).
+#
+# This is therefore the only shipped pack that is *less* strict than another
+# pack on a given entity: DATE is kept, where hipaa_safe_harbor generalizes it
+# to the year. Do not select it as a "HIPAA-lite" shortcut — without an expert
+# determination on file, §164.514(b)(1) is not satisfied and the output is not
+# de-identified PHI.
+#
+# Composition note: packs compose strictest-wins, so selecting this pack
+# TOGETHER WITH hipaa_safe_harbor yields Safe Harbor's behavior on DATE
+# (generalize beats keep). That is correct, not a bug — pick one HIPAA route.
+#
+# Direct identifiers are still removed: the expert determination relaxes the
+# quasi-identifier treatment, not the identifiers themselves.
+regulation: HIPAA_expert_determination
+version: "2026.07"
+description: HIPAA §164.514(b)(1) Expert Determination — identifiers removed, full dates retained (requires a documented determination)
+jurisdiction: US
+category: sector
+default_action: suppress
+below_threshold: review
+rules:
+  # -- direct identifiers: removed exactly as under Safe Harbor
+  - { entity: PERSON,         min_confidence: 0.85, action: hmac_tokenize }
+  - { entity: MRN,            min_confidence: 0.75, action: hash_irreversible }
+  - { entity: SSN,            min_confidence: 0.80, action: hash_irreversible }
+  - { entity: EMAIL,          min_confidence: 0.80, action: hash_irreversible }
+  - { entity: PHONE,          min_confidence: 0.80, action: hash_irreversible }
+  - { entity: IP,             min_confidence: 0.80, action: hash_irreversible }
+  - { entity: URL,            min_confidence: 0.80, action: hash_irreversible }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.75, action: hash_irreversible }
+  - { entity: PASSPORT,       min_confidence: 0.75, action: hash_irreversible }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            min_confidence: 0.75, action: hash_irreversible }
+  - { entity: ADDRESS,        min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.80, action: hmac_tokenize }
+  # -- THE DIVERGENCE: full dates retained under the expert's risk assessment.
+  #    Safe Harbor would generalize this to the year.
+  - { entity: DATE,           action: keep }
+  # -- remaining quasi-identifiers still generalized: the determination
+  #    covers dates, it is not a licence to keep everything
+  - { entity: DOB,            min_confidence: 0.75, action: generalize, params: { granularity: year } }
+  - { entity: ZIP,            min_confidence: 0.75, action: generalize }
+  - { entity: PINCODE,        min_confidence: 0.75, action: generalize }
+  - { entity: AGE,            min_confidence: 0.75, action: generalize, params: { over_89_bracket: true } }
+  # -- clinical content: de-identification removes identifiers, not facts
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  - { entity: ORG,            action: keep }
+  - { entity: ORGANIZATION,   action: keep }

@@ -83,16 +83,38 @@ replacing the single global threshold. Selected via `anonymizer bridge
 --regulations name1,name2` (also `--packs-dir`, `--policy`, `--review-dir`)
 or the platform harness `--regulations`.
 
-Shipped catalog (SHIPPED_PACKS in tests/test_policyengine.py pins it —
-extend the tuple when adding a pack): `training_default` / `rag_default`
-(bit-identical conversions of masking_policy.yaml), `hipaa_safe_harbor`,
-`gdpr_pseudonymization`, `pii_protection` (strict NIST-style baseline,
-mask_anyway), `india_dpdp` (DPDP 2023 + UIDAI/RBI/CBDT norms — Aadhaar
-suppressed outright), `pci_dss` (PAN unreadable; out-of-scope content kept —
-compose with a privacy pack), `ccpa_deidentification`. All except
-rag_default are dual-target (guarantee-aware actions only). Packs compose
-strictest-wins, so selecting several (e.g. GDPR + PCI) is the intended way
-to satisfy overlapping law.
+Shipped catalog — 18 packs (SHIPPED_PACKS in tests/test_policyengine.py pins
+it — extend the tuple when adding a pack; full table in platform docs/07):
+`training_default` / `rag_default` (bit-identical conversions of
+masking_policy.yaml), `pii_protection` (strict NIST-style baseline,
+mask_anyway), `pci_dss` (PAN unreadable; out-of-scope content kept — compose
+with a privacy pack), `gdpr_pseudonymization`, `uk_dpa_2018`, `lgpd_brazil`,
+`pipeda_canada`, `popia_south_africa`, `privacy_act_australia`,
+`pdpa_singapore`, `pipl_china`, `appi_japan`, `india_dpdp`,
+`hipaa_safe_harbor`, `hipaa_expert_determination`, `glba`,
+`ccpa_deidentification` (covers CPRA). All except rag_default are dual-target
+(guarantee-aware actions only). Packs compose strictest-wins, so selecting
+several (e.g. GDPR + PCI) is the intended way to satisfy overlapping law.
+
+Three packs carry non-obvious stances — don't "simplify" them into the GDPR
+shape:
+
+- `appi_japan` uses `hash_irreversible`, never `hmac_tokenize`, for direct
+  identifiers. Japan's anonymously-processed information (Art. 36) must be
+  unrestorable; under a rag job `hmac_tokenize` would compile to a stable,
+  linkable pseudonym. The pack is dual-target and irreversible in BOTH.
+- `pipl_china` suppresses financial accounts and location/whereabouts rather
+  than tokenizing them (Art. 28 sensitive PI), at `mask_anyway`.
+- `hipaa_expert_determination` is the only pack deliberately LOOSER than
+  another: it `keep`s DATE where `hipaa_safe_harbor` generalizes it. Composing
+  both yields Safe Harbor (strictest wins) — that's correct, not a bug.
+
+Every pack needs `jurisdiction` + `category` (catalog metadata; the console
+groups its run dialog by them — a test enforces both are set). A rule naming
+an entity outside masking_policy's vocabulary is a SILENT no-op: it never
+matches, the finding falls through to `default_action: suppress`, so it
+over-masks and nothing fails loudly. `test_shipped_pack_rules_use_known_entities`
+guards this.
 
 - **Zero engine changes**: `compile_job_policy(packs, target, base_entities)`
   folds packs into existing JobSpec levers — `type_thresholds`,
@@ -128,6 +150,26 @@ start, end, confidence, tier, validated}], "job": {job_id,
 downstream_target, ...}}`; without inline `text` it fetches
 `{text_store.url}/text/{file_id}`. Spans are offsets into the canonical
 extracted text — replacements applied right-to-left to preserve offsets.
+
+## Verification detector false positives (`core/detection.py`)
+
+`RegexDetector` is the verification safety net, so a false NEGATIVE is a leak —
+but a false POSITIVE quarantines a clean file and withholds it from delivery.
+Two guards keep numeric documents (ML datasets, logs, annotation JSON) from
+false-quarantining by the thousands; neither is optional:
+
+- `formatted` — a bare run of digits is a coordinate/id/measurement, not a
+  phone or card. Real ones carry spaces, dashes, or a leading `+`.
+- `_is_temporal` — but *dates carry exactly those separators*.
+  `"date_captured": "2020-06-24 12:34:56"` yields the 10-digit run
+  `2020-06-24 12`: formatted, in range, not a phone. Rejects date-shaped
+  surfaces and runs adjacent to `:` `/` `.`. One COCO file produced 3302 of
+  these and quarantined; a real Kaggle run withheld 11 documents.
+
+When touching these, compare neighbours against a SET of characters — `after in
+":/."` is True for the empty string (end of text), which silently rejects every
+phone number that ends a document. `tests/test_detection_scale.py` pins both
+directions (dates rejected, real phones still caught, incl. at end of text).
 
 ## Rules
 

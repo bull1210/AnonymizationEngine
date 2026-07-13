@@ -153,6 +153,27 @@ consistency, 0 false merges).
   provenance recorded in every receipt, unknown entities fail closed,
   gray-zone findings land in a review sink. Design: platform
   `docs/07_POLICY_ENGINE_DESIGN.md`.
+  **18 packs ship** (full table in docs/07): the two mode defaults, the
+  `pii_protection` baseline, `pci_dss`, and the privacy regimes — EU GDPR,
+  UK DPA 2018, LGPD (Brazil), PIPEDA (Canada), POPIA (South Africa), Australia
+  Privacy Act, PDPA (Singapore), PIPL (China), APPI (Japan), India DPDP, HIPAA
+  Safe Harbor, HIPAA Expert Determination, GLBA, CCPA/CPRA. Packs compose
+  strictest-wins, so selecting several (GDPR + PCI) is the intended way to
+  satisfy overlapping law. Each carries `jurisdiction` + `category` metadata
+  that the console groups its selection UI by.
+- **The verification detector is deliberately fussy in one direction.**
+  `core/detection.py::RegexDetector` re-scans every masked document before
+  delivery, so a false NEGATIVE is a leak — but a false POSITIVE quarantines a
+  clean file and withholds it. Two guards keep numeric documents (ML datasets,
+  logs, annotation JSON) from false-quarantining wholesale: digit runs must look
+  *formatted* (bare runs are ids/coordinates, not phone numbers), and they must
+  not be *temporal* — a date carries exactly the dashes and spaces the
+  formatting check looks for, so `"date_captured": "2020-06-24 12:34:56"` yields
+  the 10-digit run `2020-06-24 12`. One COCO annotation file produced 3,302
+  phantom PHONE "leaks" and was withheld. Both guards are pinned by
+  `tests/test_detection_scale.py`; when touching them, remember the empty string
+  is a substring of every string (`after in ":/."` is `True` at end-of-text —
+  that silently rejected every phone number ending a document).
 - The `files.masked` event is appended to `output/events.jsonl`; wire the
   Kafka producer in `Worker._publish_masked` when a broker is configured.
 - Tests: `pytest` runs 56+ tests incl. Hypothesis property tests; air-gapped

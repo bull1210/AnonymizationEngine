@@ -5,11 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from anonymizer.core.engine import Engine
 from anonymizer.core.policyload import load_policy_yaml
 from anonymizer.core.types import Finding, Target, jobspec_from_dict
 from anonymizer.policyengine import (
+    PolicyDecision,
     RegulationPack,
     action_to_strategy,
     compatible_targets,
@@ -40,6 +42,26 @@ SHIPPED_PACKS = (
     "training_default", "rag_default", "hipaa_safe_harbor",
     "gdpr_pseudonymization", "pii_protection", "india_dpdp",
     "pci_dss", "ccpa_deidentification",
+    # global privacy laws
+    "uk_dpa_2018", "lgpd_brazil", "pipl_china", "appi_japan",
+    "pipeda_canada", "popia_south_africa", "privacy_act_australia",
+    "pdpa_singapore",
+    # US sectoral
+    "glba", "hipaa_expert_determination",
+)
+
+#: The policy vocabulary: entity names the masking policy actually knows how
+#: to execute. A pack rule naming anything outside this set is a typo that
+#: fails SILENTLY — the entity never matches a finding, and the finding falls
+#: through to default_action (suppress). It over-masks, so nothing breaks
+#: loudly; it just quietly stops doing what the pack author wrote.
+KNOWN_ENTITIES = frozenset(
+    entity
+    for mapping in (
+        yaml.safe_load((CONFIG / "masking_policy.yaml").read_text(encoding="utf-8"))
+        ["policies"].values()
+    )
+    for entity in mapping
 )
 
 
@@ -69,6 +91,26 @@ class TestPackLoading:
             pack = load_pack(REGS / f"{name}.yaml")
             expected = {"rag"} if name == "rag_default" else {"rag", "training"}
             assert compatible_targets(pack) == expected, name
+
+    def test_shipped_pack_rules_use_known_entities(self) -> None:
+        """A pack rule naming an entity the masking policy doesn't know is a
+        silent no-op: it never matches, and the finding falls through to
+        default_action (suppress). It over-masks, so no test fails and no leak
+        happens — the pack just quietly doesn't do what its author wrote. With
+        18 packs, a typo like MEDICAL_CONDITION (a detection name, not a policy
+        name) is the likeliest way to ship a broken pack."""
+        for name in SHIPPED_PACKS:
+            pack = load_pack(REGS / f"{name}.yaml")
+            unknown = {r.entity for r in pack.rules} - KNOWN_ENTITIES
+            assert not unknown, f"{name}: unknown entities {sorted(unknown)}"
+
+    def test_shipped_packs_carry_catalog_metadata(self) -> None:
+        """jurisdiction/category drive the grouping in the console's run
+        dialog; a pack without them lands in an 'Other' bucket."""
+        for name in SHIPPED_PACKS:
+            pack = load_pack(REGS / f"{name}.yaml")
+            assert pack.jurisdiction, name
+            assert pack.category, name
 
     def test_multi_regulation_composition_is_strictest(self) -> None:
         """GDPR (tokenize EMAIL) + PII baseline (hash EMAIL) => hash wins;
@@ -296,3 +338,71 @@ class TestBitIdenticalDefaults:
         # and the pack covers every entity the base policy defines for the target
         base_entities = {e for (t, e) in policy.entries if t == target}
         assert base_entities == set(compiled["strategy_overrides"])
+
+
+def _decide(packs: list[RegulationPack], entity: str, confidence: float,
+            target: str) -> PolicyDecision:
+    """resolve() one synthetic finding of `entity` at `confidence`."""
+    finding = {"entity_type": entity, "start": 0, "end": 5, "confidence": confidence}
+    return resolve([finding], packs, target)[0]
+
+
+class TestJurisdictionPackStances:
+    """The four packs whose legal stance genuinely diverges from the GDPR
+    family. The rest (UK DPA, LGPD, PDPA-SG, PIPEDA, POPIA, Australia) are
+    covered by the catalog-wide tests above; asserting their near-identical
+    rule tables again would just restate the YAML."""
+
+    def test_appi_never_produces_a_linkable_identifier(self) -> None:
+        """APPI Art. 36: anonymously-processed information must not be
+        restorable. An HMAC pseudonym is unrestorable without the salt but
+        LINKABLE across the corpus, which keeps it regulated as merely
+        pseudonymized. So the pack must resolve identifiers to irreversible
+        strategies under BOTH targets — including rag, where hmac_tokenize
+        would otherwise become a stable pseudonym."""
+        pack = load_pack(REGS / "appi_japan.yaml")
+        linkable = {"hmac_pseudonym", "fpe"}
+        for target in ("training", "rag"):
+            for entity in ("PERSON", "EMAIL", "PHONE", "ADDRESS", "LOCATION", "IP"):
+                decision = _decide([pack], entity, 0.99, target)
+                assert decision.strategy not in linkable, f"{target}/{entity}"
+
+    def test_pipl_suppresses_sensitive_information_at_any_confidence(self) -> None:
+        """PIPL Art. 28-29: financial accounts and whereabouts are sensitive
+        personal information requiring separate consent, which an AI corpus
+        does not have. A stable pseudonym for someone's movements is still a
+        movement trail — these must be suppressed, not tokenized, and at a
+        confidence bar of zero (below_threshold: mask_anyway)."""
+        pack = load_pack(REGS / "pipl_china.yaml")
+        for entity in ("ACCOUNT_NUMBER", "CREDIT_CARD", "LOCATION", "ADDRESS"):
+            decision = _decide([pack], entity, 0.10, "rag")
+            assert decision.action == "suppress", entity
+            assert decision.strategy == "suppress", entity
+            assert decision.outcome == "apply", entity   # mask_anyway
+
+    def test_expert_determination_keeps_dates_where_safe_harbor_generalizes(
+        self,
+    ) -> None:
+        """The one place a shipped pack is deliberately LOOSER than another:
+        §164.514(b)(1) lets a statistician's risk assessment retain full dates
+        that Safe Harbor reduces to the year."""
+        expert = load_pack(REGS / "hipaa_expert_determination.yaml")
+        safe_harbor = load_pack(REGS / "hipaa_safe_harbor.yaml")
+        assert compose([expert], "DATE").action == "keep"
+        assert compose([safe_harbor], "DATE").action == "generalize"
+
+    def test_both_hipaa_routes_together_compose_to_safe_harbor(self) -> None:
+        """Strictest-wins means selecting both HIPAA packs is safe: the looser
+        expert-determination `keep` cannot weaken Safe Harbor. Users must still
+        pick one route — but a mis-click cannot leak a date."""
+        packs = load_packs(REGS, ["hipaa_safe_harbor", "hipaa_expert_determination"])
+        assert compose(packs, "DATE").action == "generalize"
+
+    def test_glba_masks_account_data_on_weak_evidence(self) -> None:
+        """Safeguards Rule: a 'probably an account number' left in clear text
+        is an unencrypted customer record. below_threshold: mask_anyway means
+        even a 0.1-confidence finding is removed."""
+        pack = load_pack(REGS / "glba.yaml")
+        decision = _decide([pack], "ACCOUNT_NUMBER", 0.10, "training")
+        assert decision.strategy == "suppress"
+        assert decision.outcome == "apply"

@@ -12,6 +12,8 @@
 regulation: India_DPDP
 version: "2026.07"
 description: India DPDP Act 2023 + UIDAI/RBI/CBDT identifier norms
+jurisdiction: India
+category: privacy
 default_action: suppress
 below_threshold: review
 rules:

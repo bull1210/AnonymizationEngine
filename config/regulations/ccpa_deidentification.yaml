@@ -8,6 +8,8 @@
 regulation: CCPA_deidentification
 version: "2026.07"
 description: California CCPA/CPRA de-identification — consumer + household identifiers
+jurisdiction: US
+category: privacy
 default_action: suppress
 below_threshold: review
 rules:

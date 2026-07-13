@@ -1,0 +1,44 @@
+# Canada PIPEDA (Personal Information Protection and Electronic Documents Act).
+# Principle 4.7 (Safeguards) scales protection to sensitivity; the OPC treats
+# SIN as highly sensitive and discourages its retention entirely. Health
+# information under provincial acts (PHIPA et al.) is treated like HIPAA's
+# clinical content: identifiers go, facts stay. Direct identifiers are
+# tokenized (pseudonymization is accepted practice under the Principle 4.5
+# limiting-use rule); the SIN is removed outright.
+regulation: PIPEDA_Canada
+version: "2026.07"
+description: Canada PIPEDA — tokenize identifiers, remove SIN outright, generalize quasi-identifiers
+jurisdiction: Canada
+category: privacy
+default_action: suppress
+below_threshold: review
+rules:
+  - { entity: PERSON,         min_confidence: 0.80, action: hmac_tokenize }
+  - { entity: EMAIL,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: PHONE,          min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: ADDRESS,        min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: LOCATION,       min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: IP,             min_confidence: 0.75, action: hmac_tokenize }
+  - { entity: URL,            min_confidence: 0.75, action: hash_irreversible }
+  # -- SIN: OPC guidance is that it should not be collected or retained
+  #    without statutory need — no such need exists in an AI corpus
+  - { entity: SSN,            action: suppress }
+  - { entity: PASSPORT,       min_confidence: 0.70, action: hash_irreversible }
+  - { entity: AADHAAR,        action: suppress }
+  - { entity: PAN,            min_confidence: 0.70, action: hash_irreversible }
+  - { entity: CREDIT_CARD,    action: suppress }
+  - { entity: ACCOUNT_NUMBER, min_confidence: 0.70, action: hash_irreversible }
+  - { entity: MRN,            min_confidence: 0.70, action: hash_irreversible }
+  # -- quasi-identifiers
+  - { entity: DOB,            min_confidence: 0.70, action: generalize }
+  - { entity: DATE,           min_confidence: 0.75, action: date_shift }
+  - { entity: ZIP,            min_confidence: 0.70, action: generalize }   # FSA
+  - { entity: PINCODE,        min_confidence: 0.70, action: generalize }
+  - { entity: AGE,            min_confidence: 0.70, action: generalize }
+  # -- health content: identifiers above already unlink it
+  - { entity: MEDICATION,     action: keep }
+  - { entity: DIAGNOSIS,      action: keep }
+  - { entity: PROCEDURE,      action: keep }
+  # -- PIPEDA governs personal, not corporate, information
+  - { entity: ORG,            action: keep }
+  - { entity: ORGANIZATION,   action: keep }
