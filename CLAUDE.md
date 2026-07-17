@@ -143,6 +143,23 @@ guards this.
   content they intend to preserve (HIPAA keeps MEDICATION/DIAGNOSIS/
   PROCEDURE — de-identification removes identifiers, not clinical facts).
 
+## Image pixel redaction (`anonymizer/imageredact.py`, 2026-07-17 — docs/13)
+
+Phase 1 of platform docs/11: paints detection findings out of scanned
+images' pixels. `plan_redaction` (stdlib, always importable) maps masked
+char spans → word bboxes from the extraction structure map (duck-typed:
+`.start .end .page .bbox .conf` — no cross-repo import); `redact_image`
+paints via Pillow (`[image]` extra) rebuilding each frame with
+`Image.frombytes` so EXIF/thumbnails/ICC can never survive (a thumbnail
+keeps the UNREDACTED image); `verify_redacted_image` re-OCRs (injected
+callable — this repo stays OCR-free) and re-scans with the same
+`RegexDetector` as text verification. Fail closed: an unmappable span
+writes NO output at all; low-confidence words (< 0.60 normalized) are
+review regions. The console holds a file on any of: unmappable / verify
+unavailable / re-OCR leak / low confidence. Tests:
+`tests/test_imageredact.py` (geometry Pillow-free; painting tests assert
+real pixels + EXIF absence).
+
 ## Worker message contract
 
 `Worker.process` expects `{"file_id", "text"?, "findings": [{entity_type,
